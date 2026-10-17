@@ -1,4 +1,15 @@
-from vault_rag.markdown import Section, split_sections, strip_frontmatter
+import time
+
+from vault_rag.markdown import (
+    Section,
+    extract_links,
+    split_sections,
+    strip_frontmatter,
+)
+
+# With backtracking, this many unclosed openings take seconds instead of milliseconds.
+UNCLOSED_OPENINGS = 10_000
+TIME_LIMIT_SECONDS = 1
 
 
 def test_removes_frontmatter() -> None:
@@ -59,3 +70,35 @@ def test_hash_in_code_block_is_no_heading() -> None:
 
 def test_tag_is_no_heading() -> None:
     assert split_sections("#astronomie\nText\n") == [Section("", "#astronomie\nText")]
+
+
+def test_extracts_links_in_order_with_duplicates() -> None:
+    text = "[[Mars]] kreist wie [[Erde]] um die Sonne, [[Mars]] weiter außen."
+    assert extract_links(text) == ["Mars", "Erde", "Mars"]
+
+
+def test_alias_is_dropped() -> None:
+    assert extract_links("[[Mars|der rote Planet]]") == ["Mars"]
+
+
+def test_section_is_dropped() -> None:
+    assert extract_links("[[Mars#Umlaufbahn]]") == ["Mars"]
+
+
+def test_section_and_alias_are_dropped() -> None:
+    assert extract_links("[[Mars#Umlaufbahn|Marsbahn]]") == ["Mars"]
+
+
+def test_embedded_note_counts_but_embedded_file_does_not() -> None:
+    text = "![[Mars]]\n![[mars.png]]\n![[Bahndaten.pdf]]"
+    assert extract_links(text) == ["Mars"]
+
+
+def test_line_break_ends_a_link() -> None:
+    assert extract_links("[[Mars\nErde]]") == []
+
+
+def test_many_unclosed_links_are_fast() -> None:
+    start = time.perf_counter()
+    extract_links("[[" * UNCLOSED_OPENINGS)
+    assert time.perf_counter() - start < TIME_LIMIT_SECONDS
