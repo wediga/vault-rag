@@ -8,6 +8,11 @@ FRONTMATTER = re.compile(r"\A---\r?\n.*?^---\r?$\n?", re.MULTILINE | re.DOTALL)
 HEADING = re.compile(r"^(#{1,6}) +(.+?)\s*$")
 CODE_FENCE = re.compile(r"^(```|~~~)")
 HEADING_SEPARATOR = " > "
+# The title ends where a section (#) or an alias (|) begins. Excluding [ and line
+# breaks keeps every attempt short, so unclosed links cannot cause backtracking.
+WIKILINK = re.compile(r"(!?)\[\[([^\[\]\n#|]+)(?:[#|][^\[\]\n]*)?]]")
+# Embedded images and PDFs have an extension, embedded notes don't.
+FILE_EXTENSION = re.compile(r"\.\w+$")
 
 
 class Section(NamedTuple):
@@ -44,6 +49,15 @@ def split_sections(text: str) -> list[Section]:
     sections.append(_section(path, lines))
 
     return [section for section in sections if section.text]
+
+
+def extract_links(text: str) -> list[str]:
+    """Titles of all wikilinks in order; embedded notes count, embedded files don't."""
+    return [
+        title
+        for embed, title in WIKILINK.findall(text)
+        if not (embed and FILE_EXTENSION.search(title))
+    ]
 
 
 def _section(path: list[tuple[int, str]], lines: list[str]) -> Section:
